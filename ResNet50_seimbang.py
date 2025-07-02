@@ -7,6 +7,8 @@ from tensorflow.keras.optimizers import Adam
 import os
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+# Add precision_recall_curve import
+from sklearn.metrics import precision_recall_curve, average_precision_score
 import matplotlib.pyplot as plt
 import pickle
 import random # Diperlukan untuk penyeimbangan dataset
@@ -149,6 +151,21 @@ def create_data_generators(images, labels, validation_split=0.2, batch_size=8):
 
 # Example usage
 if __name__ == "__main__":
+    # Create output directories with custom parent folder
+    base_output_dir = "Output ResNet50 Seimbang"
+    output_dirs = {
+        'models': os.path.join(base_output_dir, 'models'),
+        'roc': os.path.join(base_output_dir, 'roc_curves'),
+        'pr': os.path.join(base_output_dir, 'pr_curves'), 
+        'confusion': os.path.join(base_output_dir, 'confusion_matrices'),
+        'history': os.path.join(base_output_dir, 'training_history'),
+        'auc': os.path.join(base_output_dir, 'auc_scores'),
+        'pr_auc': os.path.join(base_output_dir, 'pr_auc_scores')
+    }
+    
+    for dir_path in output_dirs.values():
+        os.makedirs(dir_path, exist_ok=True)
+    
     # Load dataset
     print("Loading dataset...")
     images, labels = load_dataset()
@@ -184,8 +201,8 @@ if __name__ == "__main__":
     )
     
     # Save the trained ResNet50 model
-    chosen_model.save('brain_mri_resnet50_seimbang.h5')
-    print("Model saved as 'brain_mri_resnet50_seimbang.h5'")
+    chosen_model.save(os.path.join(output_dirs['models'], 'brain_mri_resnet50_seimbang.h5'))
+    print(f"Model saved as '{os.path.join(output_dirs['models'], 'brain_mri_resnet50_seimbang.h5')}'")
 
     # --- EVALUASI DAN SIMPAN ROC CURVE & CONFUSION MATRIX UNTUK TRAIN DAN TEST ---
     print("\nEvaluating model on training and test sets...")
@@ -214,16 +231,12 @@ if __name__ == "__main__":
     fpr_train, tpr_train, thresholds_train = roc_curve(y_true_train, y_score_train)
     roc_auc_train = auc(fpr_train, tpr_train)
     
-    # Simpan ROC data training
-    with open('roc_curve_train_data_resnet50_seimbang.pkl', 'wb') as f:
-        pickle.dump({'fpr': fpr_train, 'tpr': tpr_train, 'thresholds': thresholds_train, 'auc': roc_auc_train}, f)
-    print(f"Training ROC AUC: {roc_auc_train:.4f}")
-    print("Training ROC curve data saved as 'roc_curve_train_data_resnet50_seimbang.pkl'")
+    # PR Curve untuk Training
+    precision_train, recall_train, pr_thresholds_train = precision_recall_curve(y_true_train, y_score_train)
+    pr_auc_train = average_precision_score(y_true_train, y_score_train)
     
     # Confusion Matrix untuk Training
     cm_train = confusion_matrix(y_true_train, y_pred_train)
-    np.save('confusion_matrix_train_resnet50_seimbang.npy', cm_train)
-    print("Training confusion matrix saved as 'confusion_matrix_train_resnet50_seimbang.npy'")
     
     # Evaluasi pada data test
     print("\n=== TEST SET EVALUATION ===")
@@ -233,19 +246,20 @@ if __name__ == "__main__":
     fpr_test, tpr_test, thresholds_test = roc_curve(y_true_test, y_score_test)
     roc_auc_test = auc(fpr_test, tpr_test)
     
-    # Simpan ROC data test
-    with open('roc_curve_test_data_resnet50_seimbang.pkl', 'wb') as f:
-        pickle.dump({'fpr': fpr_test, 'tpr': tpr_test, 'thresholds': thresholds_test, 'auc': roc_auc_test}, f)
-    print(f"Test ROC AUC: {roc_auc_test:.4f}")
-    print("Test ROC curve data saved as 'roc_curve_test_data_resnet50_seimbang.pkl'")
+    # PR Curve untuk Test
+    precision_test, recall_test, pr_thresholds_test = precision_recall_curve(y_true_test, y_score_test)
+    pr_auc_test = average_precision_score(y_true_test, y_score_test)
     
     # Confusion Matrix untuk Test
     cm_test = confusion_matrix(y_true_test, y_pred_test)
-    np.save('confusion_matrix_test_resnet50_seimbang.npy', cm_test)
-    print("Test confusion matrix saved as 'confusion_matrix_test_resnet50_seimbang.npy'")
     
-    # === PLOT INDIVIDUAL ROC CURVES ===
-    # ROC Training only
+    print(f"Training ROC AUC: {roc_auc_train:.4f}")
+    print(f"Training PR AUC: {pr_auc_train:.4f}")
+    print(f"Test ROC AUC: {roc_auc_test:.4f}")
+    print(f"Test PR AUC: {pr_auc_test:.4f}")
+    
+    # === PLOT ROC CURVES ===
+    # ROC Training
     plt.figure(figsize=(8, 6))
     plt.plot(fpr_train, tpr_train, label=f'Training ROC (AUC = {roc_auc_train:.3f})', color='blue', linewidth=2)
     plt.plot([0, 1], [0, 1], 'k--', alpha=0.5)
@@ -254,11 +268,10 @@ if __name__ == "__main__":
     plt.title('ROC Curve - Training Set - ResNet50 (Balanced)')
     plt.legend(loc='lower right')
     plt.grid(True, alpha=0.3)
-    plt.savefig('roc_curve_training_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dirs['roc'], 'roc_curve_training_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
     plt.close()
-    print("Training ROC curve saved as 'roc_curve_training_resnet50_seimbang.png'")
 
-    # ROC Test only
+    # ROC Test
     plt.figure(figsize=(8, 6))
     plt.plot(fpr_test, tpr_test, label=f'Test ROC (AUC = {roc_auc_test:.3f})', color='red', linewidth=2)
     plt.plot([0, 1], [0, 1], 'k--', alpha=0.5)
@@ -267,124 +280,145 @@ if __name__ == "__main__":
     plt.title('ROC Curve - Test Set - ResNet50 (Balanced)')
     plt.legend(loc='lower right')
     plt.grid(True, alpha=0.3)
-    plt.savefig('roc_curve_test_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dirs['roc'], 'roc_curve_test_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
     plt.close()
-    print("Test ROC curve saved as 'roc_curve_test_resnet50_seimbang.png'")
 
-    # === PLOT INDIVIDUAL CONFUSION MATRICES ===
+    # === PLOT PR CURVES ===
+    # PR Training
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall_train, precision_train, label=f'Training PR (AUC = {pr_auc_train:.3f})', color='blue', linewidth=2)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve - Training Set - ResNet50 (Balanced)')
+    plt.legend(loc='lower left')
+    plt.grid(True, alpha=0.3)
+    plt.savefig(os.path.join(output_dirs['pr'], 'pr_curve_training_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # PR Test
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall_test, precision_test, label=f'Test PR (AUC = {pr_auc_test:.3f})', color='red', linewidth=2)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve - Test Set - ResNet50 (Balanced)')
+    plt.legend(loc='lower left')
+    plt.grid(True, alpha=0.3)
+    plt.savefig(os.path.join(output_dirs['pr'], 'pr_curve_test_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # === PLOT CONFUSION MATRICES ===
     class_names = ['Healthy', 'Tumor']
     
-    # Confusion Matrix Training only
+    # Confusion Matrix Training
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm_train, annot=True, fmt="d", cmap='Blues',
                 xticklabels=class_names, yticklabels=class_names)
     plt.title('Confusion Matrix - Training Set - ResNet50 (Balanced)')
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
-    plt.savefig('confusion_matrix_training_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dirs['confusion'], 'confusion_matrix_training_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
     plt.close()
-    print("Training confusion matrix saved as 'confusion_matrix_training_resnet50_seimbang.png'")
 
-    # Confusion Matrix Test only
+    # Confusion Matrix Test
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm_test, annot=True, fmt="d", cmap='Blues',
                 xticklabels=class_names, yticklabels=class_names)
     plt.title('Confusion Matrix - Test Set - ResNet50 (Balanced)')
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
-    plt.savefig('confusion_matrix_test_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dirs['confusion'], 'confusion_matrix_test_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
     plt.close()
-    print("Test confusion matrix saved as 'confusion_matrix_test_resnet50_seimbang.png'")
 
-    # === SAVE ROC CURVE TRAINING IN MULTIPLE FORMATS ===
-    # ROC Training - CSV
+    # === SAVE ROC CURVE DATA ===
+    # ROC Training - Multiple formats
+    with open(os.path.join(output_dirs['roc'], 'roc_curve_train_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump({'fpr': fpr_train, 'tpr': tpr_train, 'thresholds': thresholds_train, 'auc': roc_auc_train}, f)
+    
     roc_train_df = pd.DataFrame({
         'fpr': fpr_train,
         'tpr': tpr_train,
         'thresholds': thresholds_train
     })
-    roc_train_df.to_csv('roc_curve_train_data_resnet50_seimbang.csv', index=False)
+    roc_train_df.to_csv(os.path.join(output_dirs['roc'], 'roc_curve_train_data_resnet50_seimbang.csv'), index=False)
     
-    # ROC Training - NPY
-    np.save('roc_curve_train_fpr_resnet50_seimbang.npy', fpr_train)
-    np.save('roc_curve_train_tpr_resnet50_seimbang.npy', tpr_train)
-    np.save('roc_curve_train_thresholds_resnet50_seimbang.npy', thresholds_train)
-    
-    print(f"Training ROC AUC: {roc_auc_train:.4f}")
-    print("Training ROC curve saved in multiple formats:")
-    print("  - roc_curve_train_data_resnet50_seimbang.pkl")
-    print("  - roc_curve_train_data_resnet50_seimbang.csv")
-    print("  - roc_curve_train_fpr_resnet50_seimbang.npy, roc_curve_train_tpr_resnet50_seimbang.npy, roc_curve_train_thresholds_resnet50_seimbang.npy")
-    print("  - roc_curve_training_resnet50_seimbang.png")
+    np.save(os.path.join(output_dirs['roc'], 'roc_curve_train_fpr_resnet50_seimbang.npy'), fpr_train)
+    np.save(os.path.join(output_dirs['roc'], 'roc_curve_train_tpr_resnet50_seimbang.npy'), tpr_train)
+    np.save(os.path.join(output_dirs['roc'], 'roc_curve_train_thresholds_resnet50_seimbang.npy'), thresholds_train)
 
-    # === SAVE CONFUSION MATRIX TRAINING IN MULTIPLE FORMATS ===
-    # CM Training - PKL
-    with open('confusion_matrix_train_data_resnet50_seimbang.pkl', 'wb') as f:
-        pickle.dump(cm_train, f)
+    # ROC Test - Multiple formats
+    with open(os.path.join(output_dirs['roc'], 'roc_curve_test_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump({'fpr': fpr_test, 'tpr': tpr_test, 'thresholds': thresholds_test, 'auc': roc_auc_test}, f)
     
-    # CM Training - CSV
-    cm_train_df = pd.DataFrame(cm_train, index=['Healthy', 'Tumor'], columns=['Healthy', 'Tumor'])
-    cm_train_df.to_csv('confusion_matrix_train_data_resnet50_seimbang.csv')
-    
-    print("Training confusion matrix saved in multiple formats:")
-    print("  - confusion_matrix_train_resnet50_seimbang.npy")
-    print("  - confusion_matrix_train_data_resnet50_seimbang.pkl")
-    print("  - confusion_matrix_train_data_resnet50_seimbang.csv")
-    print("  - confusion_matrix_training_resnet50_seimbang.png")
-
-    # === SAVE ROC CURVE TEST IN MULTIPLE FORMATS ===
-    # ROC Test - CSV
     roc_test_df = pd.DataFrame({
         'fpr': fpr_test,
         'tpr': tpr_test,
         'thresholds': thresholds_test
     })
-    roc_test_df.to_csv('roc_curve_test_data_resnet50_seimbang.csv', index=False)
+    roc_test_df.to_csv(os.path.join(output_dirs['roc'], 'roc_curve_test_data_resnet50_seimbang.csv'), index=False)
     
-    # ROC Test - NPY
-    np.save('roc_curve_test_fpr_resnet50_seimbang.npy', fpr_test)
-    np.save('roc_curve_test_tpr_resnet50_seimbang.npy', tpr_test)
-    np.save('roc_curve_test_thresholds_resnet50_seimbang.npy', thresholds_test)
-    
-    print(f"Test ROC AUC: {roc_auc_test:.4f}")
-    print("Test ROC curve saved in multiple formats:")
-    print("  - roc_curve_test_data_resnet50_seimbang.pkl")
-    print("  - roc_curve_test_data_resnet50_seimbang.csv")
-    print("  - roc_curve_test_fpr_resnet50_seimbang.npy, roc_curve_test_tpr_resnet50_seimbang.npy, roc_curve_test_thresholds_resnet50_seimbang.npy")
-    print("  - roc_curve_test_resnet50_seimbang.png")
+    np.save(os.path.join(output_dirs['roc'], 'roc_curve_test_fpr_resnet50_seimbang.npy'), fpr_test)
+    np.save(os.path.join(output_dirs['roc'], 'roc_curve_test_tpr_resnet50_seimbang.npy'), tpr_test)
+    np.save(os.path.join(output_dirs['roc'], 'roc_curve_test_thresholds_resnet50_seimbang.npy'), thresholds_test)
 
-    # === SAVE CONFUSION MATRIX TEST IN MULTIPLE FORMATS ===
-    # CM Test - PKL
-    with open('confusion_matrix_test_data_resnet50_seimbang.pkl', 'wb') as f:
+    # === SAVE PR CURVE DATA ===
+    # PR Training - Multiple formats
+    with open(os.path.join(output_dirs['pr'], 'pr_curve_train_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump({'precision': precision_train, 'recall': recall_train, 'thresholds': pr_thresholds_train, 'auc': pr_auc_train}, f)
+    
+    pr_train_df = pd.DataFrame({
+        'precision': precision_train,
+        'recall': recall_train,
+        'thresholds': np.append(pr_thresholds_train, 1)
+    })
+    pr_train_df.to_csv(os.path.join(output_dirs['pr'], 'pr_curve_train_data_resnet50_seimbang.csv'), index=False)
+    
+    np.save(os.path.join(output_dirs['pr'], 'pr_curve_train_precision_resnet50_seimbang.npy'), precision_train)
+    np.save(os.path.join(output_dirs['pr'], 'pr_curve_train_recall_resnet50_seimbang.npy'), recall_train)
+    np.save(os.path.join(output_dirs['pr'], 'pr_curve_train_thresholds_resnet50_seimbang.npy'), pr_thresholds_train)
+
+    # PR Test - Multiple formats
+    with open(os.path.join(output_dirs['pr'], 'pr_curve_test_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump({'precision': precision_test, 'recall': recall_test, 'thresholds': pr_thresholds_test, 'auc': pr_auc_test}, f)
+    
+    pr_test_df = pd.DataFrame({
+        'precision': precision_test,
+        'recall': recall_test,
+        'thresholds': np.append(pr_thresholds_test, 1)
+    })
+    pr_test_df.to_csv(os.path.join(output_dirs['pr'], 'pr_curve_test_data_resnet50_seimbang.csv'), index=False)
+    
+    np.save(os.path.join(output_dirs['pr'], 'pr_curve_test_precision_resnet50_seimbang.npy'), precision_test)
+    np.save(os.path.join(output_dirs['pr'], 'pr_curve_test_recall_resnet50_seimbang.npy'), recall_test)
+    np.save(os.path.join(output_dirs['pr'], 'pr_curve_test_thresholds_resnet50_seimbang.npy'), pr_thresholds_test)
+
+    # === SAVE CONFUSION MATRIX DATA ===
+    # CM Training
+    np.save(os.path.join(output_dirs['confusion'], 'confusion_matrix_train_resnet50_seimbang.npy'), cm_train)
+    with open(os.path.join(output_dirs['confusion'], 'confusion_matrix_train_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump(cm_train, f)
+    cm_train_df = pd.DataFrame(cm_train, index=['Healthy', 'Tumor'], columns=['Healthy', 'Tumor'])
+    cm_train_df.to_csv(os.path.join(output_dirs['confusion'], 'confusion_matrix_train_data_resnet50_seimbang.csv'))
+
+    # CM Test
+    np.save(os.path.join(output_dirs['confusion'], 'confusion_matrix_test_resnet50_seimbang.npy'), cm_test)
+    with open(os.path.join(output_dirs['confusion'], 'confusion_matrix_test_data_resnet50_seimbang.pkl'), 'wb') as f:
         pickle.dump(cm_test, f)
-    
-    # CM Test - CSV
     cm_test_df = pd.DataFrame(cm_test, index=['Healthy', 'Tumor'], columns=['Healthy', 'Tumor'])
-    cm_test_df.to_csv('confusion_matrix_test_data_resnet50_seimbang.csv')
-    
-    print("Test confusion matrix saved in multiple formats:")
-    print("  - confusion_matrix_test_resnet50_seimbang.npy")
-    print("  - confusion_matrix_test_data_resnet50_seimbang.pkl")
-    print("  - confusion_matrix_test_data_resnet50_seimbang.csv")
-    print("  - confusion_matrix_test_resnet50_seimbang.png")
+    cm_test_df.to_csv(os.path.join(output_dirs['confusion'], 'confusion_matrix_test_data_resnet50_seimbang.csv'))
 
-    # === SAVE TRAINING HISTORY IN MULTIPLE FORMATS ===
+    # === SAVE TRAINING HISTORY ===
     if history:
-        # Training History - PKL
-        with open('training_history_data_resnet50_seimbang.pkl', 'wb') as f:
+        with open(os.path.join(output_dirs['history'], 'training_history_data_resnet50_seimbang.pkl'), 'wb') as f:
             pickle.dump(history.history, f)
         
-        # Training History - CSV
         history_df = pd.DataFrame(history.history)
-        history_df.to_csv('training_history_data_resnet50_seimbang.csv', index=False)
+        history_df.to_csv(os.path.join(output_dirs['history'], 'training_history_data_resnet50_seimbang.csv'), index=False)
         
-        # Training History - NPY
-        np.save('training_history_data_resnet50_seimbang.npy', history.history)
+        np.save(os.path.join(output_dirs['history'], 'training_history_data_resnet50_seimbang.npy'), history.history)
         
-        # Training History - PNG
+        # Training History Plot
         plt.figure(figsize=(12, 4))
         
-        # Plot training & test accuracy
         plt.subplot(1, 2, 1)
         plt.plot(history.history['accuracy'], label='Training Accuracy', color='blue')
         plt.plot(history.history['val_accuracy'], label='Test Accuracy', color='red')
@@ -394,7 +428,6 @@ if __name__ == "__main__":
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        # Plot training & test loss
         plt.subplot(1, 2, 2)
         plt.plot(history.history['loss'], label='Training Loss', color='blue')
         plt.plot(history.history['val_loss'], label='Test Loss', color='red')
@@ -405,79 +438,102 @@ if __name__ == "__main__":
         plt.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig('training_history_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(output_dirs['history'], 'training_history_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
         plt.close()
-        
-        print("Training history saved in multiple formats:")
-        print("  - training_history_data_resnet50_seimbang.pkl")
-        print("  - training_history_data_resnet50_seimbang.csv")
-        print("  - training_history_data_resnet50_seimbang.npy")
-        print("  - training_history_resnet50_seimbang.png")
 
-    # === SAVE AUC DATA IN MULTIPLE FORMATS ===
-    # AUC Training
+    # === SAVE ROC AUC DATA ===
+    # ROC AUC Training
     auc_train_data = {'auc': roc_auc_train, 'fpr': fpr_train, 'tpr': tpr_train}
-    with open('auc_train_data_resnet50_seimbang.pkl', 'wb') as f:
+    with open(os.path.join(output_dirs['auc'], 'auc_train_data_resnet50_seimbang.pkl'), 'wb') as f:
         pickle.dump(auc_train_data, f)
     
     auc_train_df = pd.DataFrame({
-        'metric': ['AUC'],
+        'metric': ['ROC_AUC'],
         'value': [roc_auc_train]
     })
-    auc_train_df.to_csv('auc_train_data_resnet50_seimbang.csv', index=False)
-    np.save('auc_train_value_resnet50_seimbang.npy', roc_auc_train)
+    auc_train_df.to_csv(os.path.join(output_dirs['auc'], 'auc_train_data_resnet50_seimbang.csv'), index=False)
+    np.save(os.path.join(output_dirs['auc'], 'auc_train_value_resnet50_seimbang.npy'), roc_auc_train)
     
+    # ROC AUC Training Bar Chart
     plt.figure(figsize=(6, 4))
-    plt.bar(['Training AUC'], [roc_auc_train], color='blue', alpha=0.7)
+    plt.bar(['Training ROC AUC'], [roc_auc_train], color='blue', alpha=0.7)
     plt.ylim(0, 1)
-    plt.ylabel('AUC Score')
-    plt.title('Training AUC Score - ResNet50 (Balanced Dataset)')
+    plt.ylabel('ROC AUC Score')
+    plt.title('Training ROC AUC Score - ResNet50 (Balanced)')
     plt.text(0, roc_auc_train + 0.02, f'{roc_auc_train:.4f}', ha='center', fontweight='bold')
     plt.grid(True, alpha=0.3)
-    plt.savefig('auc_curve_training_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dirs['auc'], 'auc_curve_training_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
     plt.close()
-    
-    print("Training AUC saved in multiple formats:")
-    print("  - auc_train_data_resnet50_seimbang.pkl")
-    print("  - auc_train_data_resnet50_seimbang.csv")
-    print("  - auc_train_value_resnet50_seimbang.npy")
-    print("  - auc_curve_training_resnet50_seimbang.png")
 
-    # AUC Test
+    # ROC AUC Test
     auc_test_data = {'auc': roc_auc_test, 'fpr': fpr_test, 'tpr': tpr_test}
-    with open('auc_test_data_resnet50_seimbang.pkl', 'wb') as f:
+    with open(os.path.join(output_dirs['auc'], 'auc_test_data_resnet50_seimbang.pkl'), 'wb') as f:
         pickle.dump(auc_test_data, f)
     
     auc_test_df = pd.DataFrame({
-        'metric': ['AUC'],
+        'metric': ['ROC_AUC'],
         'value': [roc_auc_test]
     })
-    auc_test_df.to_csv('auc_test_data_resnet50_seimbang.csv', index=False)
-    np.save('auc_test_value_resnet50_seimbang.npy', roc_auc_test)
+    auc_test_df.to_csv(os.path.join(output_dirs['auc'], 'auc_test_data_resnet50_seimbang.csv'), index=False)
+    np.save(os.path.join(output_dirs['auc'], 'auc_test_value_resnet50_seimbang.npy'), roc_auc_test)
     
+    # ROC AUC Test Bar Chart
     plt.figure(figsize=(6, 4))
-    plt.bar(['Test AUC'], [roc_auc_test], color='red', alpha=0.7)
+    plt.bar(['Test ROC AUC'], [roc_auc_test], color='red', alpha=0.7)
     plt.ylim(0, 1)
-    plt.ylabel('AUC Score')
-    plt.title('Test AUC Score - ResNet50 (Balanced Dataset)')
+    plt.ylabel('ROC AUC Score')
+    plt.title('Test ROC AUC Score - ResNet50 (Balanced)')
     plt.text(0, roc_auc_test + 0.02, f'{roc_auc_test:.4f}', ha='center', fontweight='bold')
     plt.grid(True, alpha=0.3)
-    plt.savefig('auc_curve_test_resnet50_seimbang.png', dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dirs['auc'], 'auc_curve_test_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
     plt.close()
-    
-    print("Test AUC saved in multiple formats:")
-    print("  - auc_test_data_resnet50_seimbang.pkl")
-    print("  - auc_test_data_resnet50_seimbang.csv")
-    print("  - auc_test_value_resnet50_seimbang.npy")
-    print("  - auc_curve_test_resnet50_seimbang.png")
 
-    # Combined AUC data - CSV
-    auc_combined_df = pd.DataFrame({
-        'dataset': ['Training', 'Test'],
-        'auc_score': [roc_auc_train, roc_auc_test]
+    # === SAVE PR AUC DATA ===
+    # PR AUC Training
+    pr_auc_train_data = {'pr_auc': pr_auc_train, 'precision': precision_train, 'recall': recall_train}
+    with open(os.path.join(output_dirs['pr_auc'], 'pr_auc_train_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump(pr_auc_train_data, f)
+    
+    pr_auc_train_df = pd.DataFrame({
+        'metric': ['PR_AUC'],
+        'value': [pr_auc_train]
     })
-    auc_combined_df.to_csv('auc_combined_data_resnet50_seimbang.csv', index=False)
-    print("Combined AUC data saved as 'auc_combined_data_resnet50_seimbang.csv'")
+    pr_auc_train_df.to_csv(os.path.join(output_dirs['pr_auc'], 'pr_auc_train_data_resnet50_seimbang.csv'), index=False)
+    np.save(os.path.join(output_dirs['pr_auc'], 'pr_auc_train_value_resnet50_seimbang.npy'), pr_auc_train)
+    
+    # PR AUC Training Bar Chart
+    plt.figure(figsize=(6, 4))
+    plt.bar(['Training PR AUC'], [pr_auc_train], color='blue', alpha=0.7)
+    plt.ylim(0, 1)
+    plt.ylabel('PR AUC Score')
+    plt.title('Training PR AUC Score - ResNet50 (Balanced)')
+    plt.text(0, pr_auc_train + 0.02, f'{pr_auc_train:.4f}', ha='center', fontweight='bold')
+    plt.grid(True, alpha=0.3)
+    plt.savefig(os.path.join(output_dirs['pr_auc'], 'pr_auc_curve_training_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # PR AUC Test
+    pr_auc_test_data = {'pr_auc': pr_auc_test, 'precision': precision_test, 'recall': recall_test}
+    with open(os.path.join(output_dirs['pr_auc'], 'pr_auc_test_data_resnet50_seimbang.pkl'), 'wb') as f:
+        pickle.dump(pr_auc_test_data, f)
+    
+    pr_auc_test_df = pd.DataFrame({
+        'metric': ['PR_AUC'],
+        'value': [pr_auc_test]
+    })
+    pr_auc_test_df.to_csv(os.path.join(output_dirs['pr_auc'], 'pr_auc_test_data_resnet50_seimbang.csv'), index=False)
+    np.save(os.path.join(output_dirs['pr_auc'], 'pr_auc_test_value_resnet50_seimbang.npy'), pr_auc_test)
+    
+    # PR AUC Test Bar Chart
+    plt.figure(figsize=(6, 4))
+    plt.bar(['Test PR AUC'], [pr_auc_test], color='red', alpha=0.7)
+    plt.ylim(0, 1)
+    plt.ylabel('PR AUC Score')
+    plt.title('Test PR AUC Score - ResNet50 (Balanced)')
+    plt.text(0, pr_auc_test + 0.02, f'{pr_auc_test:.4f}', ha='center', fontweight='bold')
+    plt.grid(True, alpha=0.3)
+    plt.savefig(os.path.join(output_dirs['pr_auc'], 'pr_auc_curve_test_resnet50_seimbang.png'), dpi=300, bbox_inches='tight')
+    plt.close()
 
     # === SUMMARY METRICS ===
     print("\n=== PERFORMANCE SUMMARY - RESNET50 (BALANCED DATASET) ===")
@@ -487,6 +543,7 @@ if __name__ == "__main__":
     print(f"  Recall:    {recall_score(y_true_train, y_pred_train):.4f}")
     print(f"  F1-Score:  {f1_score(y_true_train, y_pred_train):.4f}")
     print(f"  ROC AUC:   {roc_auc_train:.4f}")
+    print(f"  PR AUC:    {pr_auc_train:.4f}")
     
     print("\nTEST SET:")
     print(f"  Accuracy:  {accuracy_score(y_true_test, y_pred_test):.4f}")
@@ -494,3 +551,13 @@ if __name__ == "__main__":
     print(f"  Recall:    {recall_score(y_true_test, y_pred_test):.4f}")
     print(f"  F1-Score:  {f1_score(y_true_test, y_pred_test):.4f}")
     print(f"  ROC AUC:   {roc_auc_test:.4f}")
+    print(f"  PR AUC:    {pr_auc_test:.4f}")
+
+    print(f"\n=== FILES SAVED IN ORGANIZED DIRECTORIES ===")
+    print(f"Models: {output_dirs['models']}")
+    print(f"ROC Curves: {output_dirs['roc']}")
+    print(f"PR Curves: {output_dirs['pr']}")
+    print(f"Confusion Matrices: {output_dirs['confusion']}")
+    print(f"Training History: {output_dirs['history']}")
+    print(f"ROC AUC Scores: {output_dirs['auc']}")
+    print(f"PR AUC Scores: {output_dirs['pr_auc']}")
